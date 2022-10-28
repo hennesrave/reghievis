@@ -1,0 +1,98 @@
+#version 450
+
+layout( local_size_x = 1 ) in;
+layout( binding = 0, rgba32f ) uniform restrict writeonly image2D outSlice;
+layout( binding = 1 ) restrict writeonly buffer BufferPixelQuery
+{
+	vec4 colors[10];
+	float values[30];
+	int chosenRegion;
+} pixelQuery;
+
+uniform struct {
+	sampler3D mask;
+	sampler3D volumes[3];
+
+	sampler1D colorMap1D;
+	sampler2D colorMap2D;
+	sampler1D colorMap1DAlpha;
+	vec2 ranges[3];
+	
+	bool useColorMap2D;
+	bool useColorMap1DAlpha;
+} regions[10];
+uniform int regionCount;
+uniform vec3 slice;
+uniform vec2 pixelQueryTexel;
+
+// Algorithm same as ray caster, only that values are saved if requested
+vec4 sampleColor( in ivec3 position, bool fillPixelQuery )
+{	
+	vec4 color = vec4( 0.0 );
+	vec4 resultColor = vec4( 0.0 );
+	bool finished = false;
+
+	for( int i = 0; i < regionCount; ++i )
+	{
+		float maskValue = texelFetch( regions[i].mask, position, 0 ).x;
+
+		if( regions[i].useColorMap2D )
+		{
+			vec4 inVoxel1 = texelFetch( regions[i].volumes[0], position, 0 );
+			float value1 = ( inVoxel1.x - regions[i].ranges[0].x ) / ( regions[i].ranges[0].y - regions[i].ranges[0].x );
+				
+			vec4 inVoxel2 = texelFetch( regions[i].volumes[1], position, 0 );
+			float value2 = ( inVoxel2.x - regions[i].ranges[1].x ) / ( regions[i].ranges[1].y - regions[i].ranges[1].x );
+
+			color = texture( regions[i].colorMap2D, vec2( value1, value2 ) );
+		
+			if( fillPixelQuery )
+			{
+				pixelQuery.values[3 * i + 0] = inVoxel1.x;
+				pixelQuery.values[3 * i + 1] = inVoxel2.x;
+			}
+		} 
+		else
+		{
+			vec4 inVoxel = texelFetch( regions[i].volumes[0], position, 0 );
+			float value = ( inVoxel.x - regions[i].ranges[0].x ) / ( regions[i].ranges[0].y - regions[i].ranges[0].x );
+			color = texture( regions[i].colorMap1D, value );
+			
+			if( fillPixelQuery ) pixelQuery.values[3 * i + 0] = inVoxel.x;
+		}
+
+		if( regions[i].useColorMap1DAlpha )
+		{
+			vec4 inVoxel = texelFetch( regions[i].volumes[2], position, 0 );
+			float value = ( inVoxel.x - regions[i].ranges[2].x ) / ( regions[i].ranges[2].y - regions[i].ranges[2].x );
+			color.a = texture( regions[i].colorMap1DAlpha, value ).a;
+
+			if( fillPixelQuery ) pixelQuery.values[3 * i + 2] = inVoxel.x;
+		}
+		
+		if( fillPixelQuery ) pixelQuery.colors[i] = color;
+
+		if( maskValue != 0.0 && !finished && color.a > 0.0 )
+		{
+			resultColor = color;
+			finished = true;
+
+			if( fillPixelQuery ) pixelQuery.chosenRegion = i;
+			else break;
+		}
+	}
+
+	return resultColor;
+}
+
+void main()
+{
+	ivec2 texel = ivec2( gl_WorkGroupID.xy );
+	ivec3 voxel = ivec3(
+		slice.x == -1 ? texel.x : slice.x,
+		slice.x == -1 ? ( slice.y == -1 ? texel.y : slice.y ) : ( slice.y == -1 ? texel.x : slice.y ),
+		slice.z == -1 ? texel.y : slice.z
+	);
+
+	imageStore( outSlice, texel, sampleColor( voxel, texel == pixelQueryTexel ) );
+}

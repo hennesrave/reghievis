@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file>cube.png</file>
+        <file>down_arrow.png</file>
+        <file>stylesheet.qss</file>
+        <file>add.png</file>
+        <file>remove.png</file>
+        <file>invert.png</file>
+        <file>shaders/fullscreen.vert</file>
+        <file>shaders/raycaster.frag</file>
+        <file>shaders/parallel_coordinates.frag</file>
+        <file>shaders/parallel_coordinates.vert</file>
+        <file>east.png</file>
+        <file>west.png</file>
+        <file>shaders/region_select.comp</file>
+        <file>shaders/slice_renderer.comp</file>
+    </qresource>
+</RCC>
