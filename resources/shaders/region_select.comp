@@ -1,0 +1,52 @@
+#version 450
+
+struct Camera
+{
+	vec3 pos, forward, right, up;
+};
+
+layout( local_size_x = 1 ) in;
+layout( binding = 0, r32f ) uniform restrict image3D imageMask;
+uniform sampler2D samplerPolygon;
+
+uniform vec3 dimensions;
+uniform vec3 dimensionScaling;
+uniform vec2 viewport;
+uniform Camera camera;
+uniform int mode;
+
+vec2 projectVoxel( ivec3 voxel ) 
+{
+	vec3 position = vec3( voxel ) / ( dimensions - 1.0 );// / dimensionScaling;
+	vec3 p0 = camera.pos + camera.forward;
+	vec3 l0 = camera.pos;
+	vec3 n = -camera.forward;
+	vec3 l = normalize( position - l0 );
+	float d = dot( p0 - l0, n ) / dot( l, n );
+
+	vec3 intersection = l0 + d * l;
+	vec3 w = intersection - p0;
+
+	float x = dot( w, normalize( camera.right ) / length( camera.right ) );
+	float y = dot( w, normalize( camera.up ) / length( camera.up ) );
+
+	return vec2( x, y );
+}
+
+void main() {
+	ivec3 voxel = ivec3( gl_WorkGroupID );
+
+	bool mask = imageLoad( imageMask, voxel ).x != 0.0;
+	bool polygon = texture( samplerPolygon, ( projectVoxel( voxel ) + 1.0 ) / 2.0 ).x != 0.0;
+	
+	if( mode == 0 ) // remove mask not in polygon
+	{
+		if( mask && !polygon ) imageStore( imageMask, voxel, vec4( 0.0 ) );
+	} else if( mode == 1 ) // add mask in polygon
+	{
+		if( !mask && polygon ) imageStore( imageMask, voxel, vec4( 1.0 ) );
+	} else if( mode == 2 ) // remove mask in polygon
+	{
+		if( mask && polygon ) imageStore( imageMask, voxel, vec4( 0.0 ) );
+	}
+}
