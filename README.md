@@ -1,4 +1,4 @@
-# RegHieVis: Region-based Uncertainty Visualization in Hierarchically Clustered Ensemble Volumes
+# RegHieVis: Region-based Uncertainty in Hierarchically Clustered Ensemble Volumes
 ## Setup
 1. Clone the repository
 ```
